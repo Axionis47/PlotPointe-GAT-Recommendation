@@ -25,6 +25,12 @@ try:
 except Exception:
     enable_determinism = None  # Fallback if module not available
 
+# Structured logging (opt-in)
+try:
+    from plotpointe.utils.structured_log import log_event
+except Exception:
+    log_event = None
+
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -240,6 +246,8 @@ def main():
     ap.add_argument("--run-name", default=None, help="Optional run name; defaults to auto run_id")
     # Determinism (opt-in)
     ap.add_argument("--deterministic", action="store_true", help="Enable deterministic ops (may reduce speed)")
+    # Structured logs (opt-in)
+    ap.add_argument("--structured-logs", action="store_true", help="Emit JSON logs (run_start, epoch_end, run_complete)")
     args = ap.parse_args()
 
     cfg = Config(
@@ -265,6 +273,16 @@ def main():
     set_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[GAT-CUSTOM] Device: {device}")
+
+    # Establish run_id early for consistent logging
+    run_id = f"gat_custom_d{cfg.hidden_dim}_{int(time.time())}"
+    if getattr(args, "structured_logs", False) and log_event is not None:
+        log_event(
+            "run_start",
+            run_id=run_id,
+            model_family="gat_custom",
+            config={**cfg.__dict__, "device": str(device)},
+        )
 
     # Download inputs
     inter_gcs = f"{cfg.staging_prefix}/interactions.parquet"
@@ -348,6 +366,11 @@ def main():
         model.eval()
         val_metrics = eval_sampled(model, cfg, item_feats, edge_index, train_pos_idx, val_pos_idx)
         print(f"[GAT-CUSTOM][Epoch {epoch}] val: {val_metrics}")
+        if getattr(args, "structured_logs", False) and log_event is not None:
+            try:
+                log_event("epoch_end", run_id=run_id, epoch=epoch, loss=float(loss.item()), val=val_metrics)
+            except Exception:
+                pass
         if val_metrics.get("ndcg@20", 0.0) > best_ndcg20:
             best_ndcg20 = val_metrics.get("ndcg@20", 0.0)
             torch.save({"state_dict": model.state_dict(), "config": cfg.__dict__}, best_path)
@@ -370,12 +393,18 @@ def main():
     with open(metrics_path, "w") as f:
         json.dump(out, f, indent=2)
 
-    run_id = f"gat_custom_d{cfg.hidden_dim}_{int(time.time())}"
     chk_gcs = f"{cfg.models_prefix}/checkpoints/{run_id}.pt"
     met_gcs = f"{cfg.models_prefix}/metrics_{run_id}.json"
     gcs_upload(cfg.project_id, best_path, chk_gcs)
     gcs_upload(cfg.project_id, metrics_path, met_gcs)
     print(f"[GAT-CUSTOM] ✅ Complete. Uploaded {chk_gcs} and {met_gcs}")
+
+    if getattr(args, "structured_logs", False) and log_event is not None:
+        try:
+            log_event("run_complete", run_id=run_id, best_val_ndcg20=float(best_ndcg20), test=test_metrics,
+                      artifacts={"checkpoint": chk_gcs, "metrics": met_gcs})
+        except Exception:
+            pass
 
     # Optional: Log to Vertex AI Experiments
     if getattr(args, "use-vertex-exp", False):
