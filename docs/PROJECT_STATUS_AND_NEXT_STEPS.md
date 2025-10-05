@@ -1,4 +1,4 @@
-## Project status and next steps — PlotPointe GNN Recommender
+## Project status and next steps — GNN Recommender
 
 Updated: 2025-10-05 (local)
 Owner: PlotPointe
