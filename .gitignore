@@ -82,15 +82,24 @@ tmp/*
 .DS_Store
 Thumbs.db
 
-# Coverage
+# Testing & Coverage
 .coverage
+.coverage.*
 htmlcov/
-
-# pytest
+coverage.json
+coverage.xml
 .pytest_cache/
+.tox/
+.hypothesis/
 
-# mypy
+# Type checking
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.pytype/
+
+# Profiling
+*.prof
+*.lprof
+.prof/
 

@@ -140,10 +140,17 @@ def main():
     embeddings = np.array(embeddings_list)
     valid_count = len(embeddings)
     throughput = valid_count / encode_time if encode_time > 0 else 0
-    
+
     print(f"[EMBED_IMAGE] Encoded {valid_count} images in {encode_time:.2f}s ({throughput:.1f} items/sec)")
     print(f"[EMBED_IMAGE] Failed: {failed_count} ({failed_count/(valid_count+failed_count)*100:.1f}%)")
-    
+
+    # Normalize embeddings (ensure unit norm for cosine similarity)
+    print(f"[EMBED_IMAGE] Normalizing embeddings...")
+    norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+    embeddings = embeddings / (norms + 1e-8)
+    mean_norm = np.linalg.norm(embeddings, axis=1).mean()
+    print(f"[EMBED_IMAGE] Mean norm after normalization: {mean_norm:.4f}")
+
     # Determine output file names (with chunk ID if specified)
     chunk_suffix = f"_{args.chunk_id}" if args.chunk_id else ""
 

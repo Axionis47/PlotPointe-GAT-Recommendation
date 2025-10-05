@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--output-prefix", required=True, help="gs://bucket/path")
     parser.add_argument("--output-name", required=True, help="Output filename (e.g., ii_edges_txt)")
     parser.add_argument("--k", type=int, default=20, help="Number of nearest neighbors")
+    parser.add_argument("--min-similarity", type=float, default=0.3, help="Minimum similarity threshold")
     parser.add_argument("--batch-size", type=int, default=1000, help="Batch size for similarity computation")
     args = parser.parse_args()
     
@@ -32,6 +33,7 @@ def main():
     print(f"[BUILD_II_KNN] Embeddings: {args.embeddings_path}")
     print(f"[BUILD_II_KNN] Output: {args.output_prefix}/{args.output_name}.npz")
     print(f"[BUILD_II_KNN] k: {args.k}")
+    print(f"[BUILD_II_KNN] Min similarity: {args.min_similarity}")
     
     # Download embeddings
     print("[BUILD_II_KNN] Downloading embeddings...")
@@ -76,19 +78,25 @@ def main():
         # For each item in batch, find top-k neighbors (excluding self)
         for i, item_idx in enumerate(range(start_idx, end_idx)):
             sims = similarities[i]
-            
+
             # Set self-similarity to -inf to exclude it
             sims[item_idx] = -np.inf
-            
+
             # Get top-k indices
             top_k_indices = np.argpartition(sims, -args.k)[-args.k:]
             top_k_indices = top_k_indices[np.argsort(sims[top_k_indices])[::-1]]
             top_k_sims = sims[top_k_indices]
-            
-            # Add edges
-            all_rows.extend([item_idx] * args.k)
-            all_cols.extend(top_k_indices)
-            all_sims.extend(top_k_sims)
+
+            # Filter by similarity threshold (remove weak connections)
+            valid_mask = top_k_sims >= args.min_similarity
+            top_k_indices = top_k_indices[valid_mask]
+            top_k_sims = top_k_sims[valid_mask]
+
+            # Add edges (variable number per item after filtering)
+            if len(top_k_indices) > 0:
+                all_rows.extend([item_idx] * len(top_k_indices))
+                all_cols.extend(top_k_indices)
+                all_sims.extend(top_k_sims)
     
     # Create sparse matrix
     print("[BUILD_II_KNN] Creating sparse matrix...")

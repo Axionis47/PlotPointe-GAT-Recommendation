@@ -24,6 +24,7 @@ workerPoolSpecs:
             --output-prefix=gs://plotpointe-artifacts/graphs \
             --output-name=ii_edges_fused \
             --k=20 \
+            --min-similarity=0.3 \
             --batch-size=1000
           
           echo "[SETUP] ✅ Fused I-I kNN complete!"

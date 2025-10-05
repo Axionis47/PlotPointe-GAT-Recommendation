@@ -46,12 +46,12 @@ while true; do
   sleep 30
 done
 
-# Step 2: Image embeddings (T4 preemptible)
-echo "[EMBEDDINGS] Step 2/3: Image embeddings (T4 preemptible)..."
+# Step 2: Image embeddings (L4)
+echo "[EMBEDDINGS] Step 2/3: Image embeddings (L4)..."
 JOB_IMAGE=$(gcloud ai custom-jobs create \
   --region=$REGION \
   --display-name=embed-image-$(date +%s) \
-  --config=vertex/configs/embed_image.yaml \
+  --config=vertex/configs/embed_image_l4.yaml \
   --format='value(name)')
 
 echo "  Job: $JOB_IMAGE"
@@ -80,12 +80,12 @@ while true; do
   sleep 30
 done
 
-# Step 3: Fusion (CPU)
-echo "[EMBEDDINGS] Step 3/3: Multimodal fusion (CPU)..."
+# Step 3: Fusion (L4)
+echo "[EMBEDDINGS] Step 3/3: Multimodal fusion (L4)..."
 JOB_FUSE=$(gcloud ai custom-jobs create \
   --region=$REGION \
   --display-name=fuse-modal-$(date +%s) \
-  --config=vertex/configs/fuse_modal.yaml \
+  --config=vertex/configs/fuse_modal_l4.yaml \
   --format='value(name)')
 
 echo "  Job: $JOB_FUSE"

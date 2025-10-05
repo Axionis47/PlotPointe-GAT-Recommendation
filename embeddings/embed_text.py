@@ -64,13 +64,38 @@ def main():
     
     items = pd.read_parquet(items_path)
     print(f"[EMBED_TEXT] Loaded {len(items)} items")
-    
-    # Prepare text: title + description
+
+    # Prepare text: title + brand + categories (enhanced features)
+    print(f"[EMBED_TEXT] Preparing text features...")
+    text_parts = []
+
+    # Always include title
+    text_parts.append(items["title"].fillna(""))
+
+    # Add brand if available
+    if "brand" in items.columns:
+        brand_text = items["brand"].fillna("").apply(lambda x: f"Brand: {x}" if x else "")
+        text_parts.append(brand_text)
+        print(f"[EMBED_TEXT] Including brand information")
+
+    # Add categories if available
+    if "categories" in items.columns:
+        cat_text = items["categories"].apply(
+            lambda x: " ".join(x) if isinstance(x, list) and x else ""
+        )
+        text_parts.append(cat_text)
+        print(f"[EMBED_TEXT] Including category information")
+
+    # Add description if available (though it doesn't exist in Amazon Electronics)
     if "description" in items.columns:
-        items["text"] = items["title"].fillna("") + " " + items["description"].fillna("")
-    else:
-        items["text"] = items["title"].fillna("")
-    items["text"] = items["text"].str.strip()
+        text_parts.append(items["description"].fillna(""))
+        print(f"[EMBED_TEXT] Including description")
+
+    # Combine all parts
+    items["text"] = pd.Series([" ".join(parts).strip() for parts in zip(*text_parts)])
+
+    # Log sample
+    print(f"[EMBED_TEXT] Sample text (first item): {items['text'].iloc[0][:200]}...")
     
     # Load encoder
     print(f"[EMBED_TEXT] Loading encoder: {args.model_name}")

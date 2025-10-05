@@ -16,20 +16,60 @@ from tqdm import tqdm
 
 
 class FusionMLP(nn.Module):
-    """Simple MLP to fuse text and image embeddings."""
+    """Simple MLP to fuse text and image embeddings, plus modality projection heads."""
     def __init__(self, text_dim, img_dim, output_dim=128, hidden_dim=256):
         super().__init__()
         input_dim = text_dim + img_dim
+        # Fusion MLP maps concat([txt, img]) -> output_dim
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(hidden_dim, output_dim),
         )
-    
+        # Projection heads map each modality into the fused space for contrastive loss
+        self.txt_proj = nn.Linear(text_dim, output_dim)
+        self.img_proj = nn.Linear(img_dim, output_dim)
+
     def forward(self, text_emb, img_emb):
         concat = torch.cat([text_emb, img_emb], dim=-1)
         return self.mlp(concat)
+
+
+def contrastive_fusion_loss(fused, txt_emb, img_emb, temperature=0.07):
+    """
+    InfoNCE contrastive loss: fused embeddings should be similar to both
+    text and image embeddings of the same item.
+
+    This is better than simple L2 norm loss because it:
+    1. Preserves semantic similarity
+    2. Learns meaningful fusion
+    3. Has supervision signal from both modalities
+    """
+    import torch.nn.functional as F
+
+    batch_size = fused.size(0)
+
+    # Normalize embeddings
+    fused_norm = F.normalize(fused, dim=-1)
+    txt_norm = F.normalize(txt_emb, dim=-1)
+    img_norm = F.normalize(img_emb, dim=-1)
+
+    # Compute similarity matrices
+    sim_fused_txt = torch.matmul(fused_norm, txt_norm.T) / temperature
+    sim_fused_img = torch.matmul(fused_norm, img_norm.T) / temperature
+
+    # Labels: diagonal elements (same item)
+    labels = torch.arange(batch_size, device=fused.device)
+
+    # Cross-entropy loss (InfoNCE)
+    loss_txt = F.cross_entropy(sim_fused_txt, labels)
+    loss_img = F.cross_entropy(sim_fused_img, labels)
+
+    # Combined loss
+    loss = (loss_txt + loss_img) / 2
+
+    return loss, loss_txt.item(), loss_img.item()
 
 
 def main():
@@ -106,72 +146,99 @@ def main():
     # Map image embeddings to text embedding indices
     img_indices = [asin_to_idx[asin] for asin in img_items["asin"] if asin in asin_to_idx]
     print(f"[FUSE_MODAL] Matched {len(img_indices)} items with both text and image embeddings")
-    
+
+    # Create O(1) lookup dictionary for efficient access
+    img_idx_map = {global_idx: local_idx for local_idx, global_idx in enumerate(img_indices)}
+    print(f"[FUSE_MODAL] Created efficient lookup map")
+
     # Align embeddings
     txt_emb_aligned = txt_emb[img_indices]
     img_emb_aligned = img_emb[:len(img_indices)]
-    
+
     print(f"[FUSE_MODAL] Aligned text: {txt_emb_aligned.shape}, image: {img_emb_aligned.shape}")
+
+    # Compute mean image embedding for items without images
+    mean_img_emb = img_emb_aligned.mean(axis=0)
+    print(f"[FUSE_MODAL] Computed mean image embedding for fallback")
     
     # Initialize fusion model
     text_dim = txt_emb_aligned.shape[1]
     img_dim = img_emb_aligned.shape[1]
     model = FusionMLP(text_dim, img_dim, args.output_dim, args.hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    criterion = nn.MSELoss()  # Simple reconstruction loss
-    
+
     # Convert to tensors
     txt_tensor = torch.from_numpy(txt_emb_aligned).float()
     img_tensor = torch.from_numpy(img_emb_aligned).float()
-    
-    # Training loop (simple self-supervised: reconstruct concatenated input)
+
+    # Training loop with contrastive loss
     print(f"[FUSE_MODAL] Training fusion MLP for {args.epochs} epochs...")
+    print(f"[FUSE_MODAL] Using contrastive loss (InfoNCE) for better fusion")
     model.train()
-    
+
     for epoch in range(args.epochs):
         epoch_loss = 0.0
+        epoch_loss_txt = 0.0
+        epoch_loss_img = 0.0
         n_batches = 0
-        
+
         for i in range(0, len(txt_tensor), args.batch_size):
             batch_txt = txt_tensor[i:i+args.batch_size].to(device)
             batch_img = img_tensor[i:i+args.batch_size].to(device)
-            
+
             optimizer.zero_grad()
             fused = model(batch_txt, batch_img)
-            
-            # Simple loss: L2 norm should be close to 1 (normalized)
-            loss = criterion(fused.norm(dim=-1), torch.ones(len(fused), device=device))
+
+            # Project modalities to fused space for contrastive loss
+            txt_proj = model.txt_proj(batch_txt)
+            img_proj = model.img_proj(batch_img)
+
+            # Contrastive loss: fused should be similar to both text and image (same dim)
+            loss, loss_txt, loss_img = contrastive_fusion_loss(fused, txt_proj, img_proj)
             loss.backward()
             optimizer.step()
-            
+
             epoch_loss += loss.item()
+            epoch_loss_txt += loss_txt
+            epoch_loss_img += loss_img
             n_batches += 1
-        
+
         avg_loss = epoch_loss / n_batches
-        print(f"  Epoch {epoch+1}/{args.epochs}: loss={avg_loss:.4f}")
-        aiplatform.log_time_series_metrics({"train_loss": avg_loss})
+        avg_loss_txt = epoch_loss_txt / n_batches
+        avg_loss_img = epoch_loss_img / n_batches
+        print(f"  Epoch {epoch+1}/{args.epochs}: loss={avg_loss:.4f} (txt={avg_loss_txt:.4f}, img={avg_loss_img:.4f})")
+        aiplatform.log_time_series_metrics({
+            "train_loss": avg_loss,
+            "train_loss_txt": avg_loss_txt,
+            "train_loss_img": avg_loss_img,
+        })
     
-    # Generate fused embeddings for ALL items (use zero for missing image)
+    # Generate fused embeddings for ALL items (use mean for missing images)
     print(f"[FUSE_MODAL] Generating fused embeddings for all items...")
+    print(f"[FUSE_MODAL] Items with images: {len(img_indices)} ({100*len(img_indices)/len(txt_emb):.1f}%)")
+    print(f"[FUSE_MODAL] Items without images: {len(txt_emb)-len(img_indices)} ({100*(len(txt_emb)-len(img_indices))/len(txt_emb):.1f}%)")
     model.eval()
-    
+
+    # Convert mean image embedding to tensor once
+    mean_img_tensor = torch.from_numpy(mean_img_emb).float().to(device)
+
     fused_embeddings = []
     with torch.no_grad():
         for i in tqdm(range(0, len(txt_emb), args.batch_size)):
             batch_txt = torch.from_numpy(txt_emb[i:i+args.batch_size]).float().to(device)
-            
-            # For items without images, use zero vector
-            batch_img = torch.zeros(len(batch_txt), img_dim, device=device)
-            
-            # For items with images, use actual embeddings
+
+            # For items without images, use mean image embedding (better than zero)
+            batch_img = mean_img_tensor.unsqueeze(0).expand(len(batch_txt), -1).clone()
+
+            # For items with images, use actual embeddings (O(1) lookup)
             for j, global_idx in enumerate(range(i, min(i+args.batch_size, len(txt_emb)))):
-                if global_idx in img_indices:
-                    local_img_idx = img_indices.index(global_idx)
+                if global_idx in img_idx_map:
+                    local_img_idx = img_idx_map[global_idx]
                     batch_img[j] = torch.from_numpy(img_emb_aligned[local_img_idx]).float().to(device)
-            
+
             fused = model(batch_txt, batch_img)
             # Normalize
-            fused = fused / fused.norm(dim=-1, keepdim=True)
+            fused = fused / (fused.norm(dim=-1, keepdim=True) + 1e-8)
             fused_embeddings.append(fused.cpu().numpy())
     
     fused_embeddings = np.vstack(fused_embeddings)

@@ -1,9 +1,12 @@
 workerPoolSpecs:
   - machineSpec:
-      machineType: g2-standard-8
-      acceleratorType: NVIDIA_L4
+      machineType: n1-standard-8
+      acceleratorType: NVIDIA_TESLA_T4
       acceleratorCount: 1
     replicaCount: 1
+    diskSpec:
+      bootDiskType: pd-ssd
+      bootDiskSizeGb: 100
     containerSpec:
       imageUri: us-docker.pkg.dev/deeplearning-platform-release/gcr.io/pytorch-cu121.2-1.py310
       command:
@@ -11,7 +14,7 @@ workerPoolSpecs:
         - -lc
         - |
           set -e
-          echo "[SETUP] Starting image embeddings on L4 GPU..."
+          echo "[SETUP] Starting image embeddings on T4 GPU..."
           echo "[SETUP] Downloading script from GCS..."
           gsutil cp gs://plotpointe-artifacts/code/embeddings/embed_image.py /tmp/embed_image.py
           
@@ -28,7 +31,7 @@ workerPoolSpecs:
             --output-prefix=gs://plotpointe-artifacts/embeddings \
             --experiment-name=recsys-dev \
             --model-name=openai/clip-vit-base-patch32 \
-            --batch-size=64 \
+            --batch-size=32 \
             --max-items=150000 \
             --download-timeout=5
           

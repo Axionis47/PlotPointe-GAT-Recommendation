@@ -63,19 +63,30 @@ def main():
     print("[BUILD_UI] Building edge list...")
     user_indices = interactions["user_id"].map(user_to_idx).values
     item_indices = interactions["asin"].map(item_to_idx).values
-    
+
     # Create sparse adjacency matrix (users x items)
-    # Values are 1 for interaction (could use ratings if available)
-    values = np.ones(len(interactions), dtype=np.float32)
-    
+    # Use ratings as edge weights (normalized to [0, 1])
+    if "rating" in interactions.columns:
+        # Normalize ratings from [1, 5] to [0, 1]
+        values = (interactions["rating"].values - 1.0) / 4.0
+        print(f"[BUILD_UI] Using ratings as edge weights (normalized to [0, 1])")
+        print(f"[BUILD_UI] Rating stats: min={values.min():.2f}, max={values.max():.2f}, mean={values.mean():.2f}")
+    else:
+        # Fallback to binary edges
+        values = np.ones(len(interactions), dtype=np.float32)
+        print(f"[BUILD_UI] Using binary edge weights (no ratings available)")
+
+    values = values.astype(np.float32)
+
     ui_matrix = coo_matrix(
         (values, (user_indices, item_indices)),
         shape=(n_users, n_items),
         dtype=np.float32
     )
-    
+
     print(f"[BUILD_UI] Edge count: {ui_matrix.nnz:,}")
     print(f"[BUILD_UI] Sparsity: {100 * (1 - ui_matrix.nnz / (n_users * n_items)):.4f}%")
+    print(f"[BUILD_UI] Edge weight stats: min={ui_matrix.data.min():.2f}, max={ui_matrix.data.max():.2f}, mean={ui_matrix.data.mean():.2f}")
     
     # Save locally
     ui_edges_path = "tmp/ui_edges.npz"
