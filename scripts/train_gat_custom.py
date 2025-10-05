@@ -19,6 +19,12 @@ import pandas as pd
 import torch
 from google.cloud import storage
 
+# Determinism utils (optional)
+try:
+    from plotpointe.utils.random import enable_determinism
+except Exception:
+    enable_determinism = None  # Fallback if module not available
+
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -228,6 +234,12 @@ def main():
     ap.add_argument("--eval-neg-k", type=int, default=1000)
     ap.add_argument("--item-features", choices=["fused", "txt"], default="fused")
     ap.add_argument("--loss", choices=["bpr", "bce"], default="bpr")
+    # Vertex AI Experiments (opt-in)
+    ap.add_argument("--use-vertex-exp", action="store_true", help="Log run to Vertex AI Experiments")
+    ap.add_argument("--exp-name", default="recsys-dev", help="Vertex AI experiment name")
+    ap.add_argument("--run-name", default=None, help="Optional run name; defaults to auto run_id")
+    # Determinism (opt-in)
+    ap.add_argument("--deterministic", action="store_true", help="Enable deterministic ops (may reduce speed)")
     args = ap.parse_args()
 
     cfg = Config(
@@ -247,6 +259,9 @@ def main():
         loss=args.loss,
     )
 
+    # Optional deterministic mode
+    if getattr(args, "deterministic", False) and enable_determinism is not None:
+        enable_determinism(cfg.seed)
     set_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[GAT-CUSTOM] Device: {device}")
@@ -361,6 +376,30 @@ def main():
     gcs_upload(cfg.project_id, best_path, chk_gcs)
     gcs_upload(cfg.project_id, metrics_path, met_gcs)
     print(f"[GAT-CUSTOM] ✅ Complete. Uploaded {chk_gcs} and {met_gcs}")
+
+    # Optional: Log to Vertex AI Experiments
+    if getattr(args, "use-vertex-exp", False):
+        try:
+            from google.cloud import aiplatform as aip
+            aip.init(project=cfg.project_id, location=cfg.region, experiment=(args.exp_name or "recsys-dev"))
+            exp_run_name = args.run_name or run_id
+            with aip.start_run(run=exp_run_name) as run:
+                # Params
+                params = dict(cfg.__dict__)
+                params.update({"model_family": "gat_custom", "run_id": run_id, "chk_gcs": chk_gcs, "met_gcs": met_gcs})
+                run.log_params(params)
+                # Metrics
+                for k, v in out.get("val", {}).items():
+                    run.log_metrics({f"val/{k}": v})
+                for k, v in out.get("test", {}).items():
+                    run.log_metrics({f"test/{k}": v})
+                run.log_metrics({"best_val_ndcg@20": out.get("best_val_ndcg@20", -1.0)})
+                # Artifacts (local paths)
+                run.log_artifact(metrics_path)
+                run.log_artifact(best_path)
+            print("[GAT-CUSTOM] Vertex Experiments logging completed.")
+        except Exception as e:
+            print(f"[GAT-CUSTOM] Vertex Experiments logging skipped: {e}")
 
 
 if __name__ == "__main__":
