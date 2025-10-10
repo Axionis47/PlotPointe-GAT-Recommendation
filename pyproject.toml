@@ -44,6 +44,21 @@ Repository = "https://github.com/Axionis47/gat-recsys"
 Documentation = "https://github.com/Axionis47/gat-recsys/tree/main/docs"
 Issues = "https://github.com/Axionis47/gat-recsys/issues"
 
+
+# Limit package discovery to the main library only to avoid flat-layout errors
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "plotpointe*",
+]
+exclude = [
+  "tests*", "tmp*", "data*", "docker*", "graphs*", "vertex*", "serving*", "bigquery*",
+  "terraform*", "manifests*", "embeddings*", "experiments*", "tools*"
+]
+
 # ============================================================================
 # Tool Configurations
 # ============================================================================
