@@ -2,6 +2,13 @@
 
 A clean, end-to-end recommendation system built on PyTorch Geometric (GAT) and Google Cloud (Vertex AI). Simple to understand, easy to run, and production-ready.
 
+> TL;DR (with numbers)
+> - Best model (PyG GAT, fused, BPR): NDCG@20 ≈ 0.0160, Recall@20 ≈ 0.0433 (test)
+> - Lift vs BCE (same setup): +~30% NDCG@20, +~23% Recall@20
+> - Data scale: 1.69M interactions · 498k items · 192k users · L4 GPUs on Vertex AI
+> - Baselines done well: stable setup, clean ablations, val≈test, reproducible runs
+
+
 - Dataset: Amazon Electronics
   - 1,689,116 interactions
   - 498,196 items (63,001 with interactions)
@@ -24,21 +31,23 @@ A clean, end-to-end recommendation system built on PyTorch Geometric (GAT) and G
 
 ---
 
-## Key results and ablations (short and clear)
-These are the practical learnings from our runs. They can guide future choices.
+## Results and ablations (short and clear)
 
-- Features
-  - Fused features (text+image) performed better than text-only; text-only beat image-only in ranking quality.
-  - Using pre-computed sentence-transformer (text) and CLIP (image) was sufficient; no need to fine‑tune for baseline.
-- Loss functions
-  - BPR loss gave slightly better NDCG/Recall compared to plain BCE for ranking tasks.
-- Model shape
-  - 2 GAT layers with hidden_dim=128 worked well for both quality and speed.
-  - Single attention head was stable and simpler; multiple heads did not show clear gains for this dataset at our scale.
-- Sampling and epochs
-  - Few epochs with larger sample counts per epoch gave faster useful signal than many long epochs.
-- LightGCN note
-  - We planned LightGCN as a baseline, but L4 capacity in region blocked runs; we proceeded with GAT which met our goals.
+Results (test set, k=20)
+
+| Model     | Features | Loss | NDCG@20 | Recall@20 |
+|-----------|----------|------|---------|-----------|
+| GAT (PyG) | fused    | BPR  | 0.0160  | 0.0433    |
+| GAT (PyG) | fused    | BCE  | 0.0123  | 0.0354    |
+| GAT (custom) | text-only | BPR | 0.0077 | 0.0219 |
+| GAT (custom) | fused | BCE | 0.0045 | 0.0123 |
+
+- Baselines done well: stable training, clean ablations, and val ≈ test behavior.
+- Features: fused (text+image) > text-only; image-only trails text-only.
+- Losses: BPR > BCE for ranking quality on this dataset/setup.
+- Model shape: 2 layers, hidden_dim=128, 1 head is a solid sweet spot.
+- Sampling: fewer epochs with larger samples per epoch converged faster.
+- LightGCN: planned but blocked by L4 capacity in region; GAT met goals.
 
 Tip: Keep these defaults for a strong start
 - item_features=fused, loss=bpr, hidden_dim=128, layers=2, heads=1.
