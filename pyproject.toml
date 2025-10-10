@@ -39,10 +39,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Axionis47/PlotPointe-GAT-Recommendation"
-Repository = "https://github.com/Axionis47/PlotPointe-GAT-Recommendation"
-Documentation = "https://github.com/Axionis47/PlotPointe-GAT-Recommendation/tree/main/docs"
-Issues = "https://github.com/Axionis47/PlotPointe-GAT-Recommendation/issues"
+Homepage = "https://github.com/Axionis47/gat-recsys"
+Repository = "https://github.com/Axionis47/gat-recsys"
+Documentation = "https://github.com/Axionis47/gat-recsys/tree/main/docs"
+Issues = "https://github.com/Axionis47/gat-recsys/issues"
 
 # ============================================================================
 # Tool Configurations

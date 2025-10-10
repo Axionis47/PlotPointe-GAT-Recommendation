@@ -5,7 +5,7 @@ workerPoolSpecs:
       acceleratorCount: 1
     replicaCount: 1
     containerSpec:
-      imageUri: ghcr.io/axionis47/plotpointe-gat-recommendation:latest
+      imageUri: ghcr.io/axionis47/gat-recsys:latest
       command:
         - /bin/bash
         - -lc

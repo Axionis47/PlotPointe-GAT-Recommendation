@@ -3,7 +3,7 @@
 This container pre-installs PyTorch 2.1.0 (CUDA 12.1), PyG wheels, and core libs so Vertex jobs skip cold-start pip installs.
 
 - Base: `us-docker.pkg.dev/deeplearning-platform-release/gcr.io/pytorch-cu121.2-1.py310`
-- Image: `ghcr.io/<owner>/plotpointe-gat-recommendation:<tag>` (built by GitHub Actions)
+- Image: `ghcr.io/<owner>/gat-recsys:<tag>` (built by GitHub Actions)
 - Entrypoints (baked): `python -m scripts.train_gat_pyg` or `python -m scripts.train_gat_custom`
 
 ## Build & Push (CI)

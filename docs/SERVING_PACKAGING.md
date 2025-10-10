@@ -11,7 +11,7 @@ Baseline recommendation logic: given a user's recent item_ids, compute the user 
 
 ## Build serving image (CI)
 - Push to `main` or trigger manually the workflow `Container Image (Serving)`.
-- Image name: `ghcr.io/<owner>/plotpointe-gat-serving:<tag>` (auto-tags: branch, sha, latest on main)
+- Image name: `ghcr.io/<owner>/gat-serving:<tag>` (auto-tags: branch, sha, latest on main)
 
 ## Export item embeddings (one-time per model)
 You can run as a Vertex job using the training image:
@@ -42,7 +42,7 @@ Example deploy (replace image and URIs):
 
 ```
 gcloud run deploy plotpointe-recsys --region=us-central1 \
-  --image=ghcr.io/<owner>/plotpointe-gat-serving:latest \
+  --image=ghcr.io/<owner>/gat-serving:latest \
   --allow-unauthenticated \
   --port=8080 \
   --set-env-vars=PROJECT_ID=plotpointe,ITEM_EMBEDDINGS_URI=gs://plotpointe-artifacts/models/gat/pyg/exports/item_embeddings.npy,TOPK=20
