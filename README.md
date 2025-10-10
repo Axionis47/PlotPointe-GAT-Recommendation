@@ -43,6 +43,24 @@ These are the practical learnings from our runs. They can guide future choices.
 Tip: Keep these defaults for a strong start
 - item_features=fused, loss=bpr, hidden_dim=128, layers=2, heads=1.
 
+
+### Ablation numbers (evidence)
+Source files in repo (JSON):
+- tmp/metrics/pyg/metrics_gat_pyg_d128_1759651719.json (fused, BPR)
+- tmp/metrics/pyg/metrics_gat_pyg_d128_1759665437.json (fused, BCE)
+- tmp/metrics/custom/metrics_gat_custom_d128_1759654706.json (text-only, BPR)
+- tmp/metrics/custom/metrics_gat_custom_d128_1759650827.json (fused, BCE)
+
+Key test metrics (NDCG@20, Recall@20):
+- PyG GAT, fused, BPR → ndcg@20 = 0.0160, recall@20 = 0.0433
+- PyG GAT, fused, BCE → ndcg@20 = 0.0123, recall@20 = 0.0354
+- Custom GAT, text-only, BPR → ndcg@20 = 0.0077, recall@20 = 0.0219
+- Custom GAT, fused, BCE → ndcg@20 = 0.0045, recall@20 = 0.0123
+
+Takeaway (example): On PyG with fused features, BPR vs BCE improves NDCG@20 by ~30% and Recall@20 by ~23% on test.
+
+Note: Exact values vary run-to-run; see the JSONs above for full details (val/test splits and config). You can “bless” one metrics.json and gate regressions using tools/promotion_gate.py.
+
 ---
 
 ## Architecture overview
