@@ -23,6 +23,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -U setuptools wheel
+          # Minimal runtime deps needed by tests
+          pip install "numpy>=1.24,<2.0" "torch==2.1.0"
+          # Install project and dev tooling
           pip install .
           pip install black isort flake8 mypy pytest pytest-cov pytest-timeout pylint
 
